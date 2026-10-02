@@ -275,3 +275,228 @@ footer {
   padding: 8px 12px;
   border-radius: 8px;
 }
+
+/* ---- 阀门核验证据工作流 ---- */
+
+.notice {
+  margin-top: 12px;
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.layout-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 1200px) {
+  .layout-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding-left: 22px;
+}
+
+.vstate {
+  font-size: 11px;
+  color: #166534;
+}
+
+.vstate.closed {
+  color: #991b1b;
+  font-weight: 600;
+}
+
+button.mini {
+  padding: 1px 8px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+button.warn {
+  background: #b45309;
+  border-color: #b45309;
+  color: #fff;
+}
+
+.btns-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  border-radius: 10px;
+  padding: 1px 8px;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.chip.none {
+  opacity: 0.6;
+}
+
+.chip[data-status='verified'],
+.chip[data-status='confirmable'],
+.chip[data-status='confirmed'] {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.chip[data-status='pending'] {
+  background: #fef9c3;
+  border-color: #fde047;
+  color: #854d0e;
+}
+
+.chip[data-status='contradiction'],
+.chip[data-status='blocked'] {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.chip[data-status='expired'],
+.chip[data-status='superseded'],
+.chip[data-status='stale'],
+.chip[data-status='infeasible'] {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+.chip[data-status='resolved_corrected'],
+.chip[data-status='resolved_dismissed'] {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+  color: #3730a3;
+}
+
+.dispositions {
+  margin-top: 10px;
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.dispositions h3 {
+  margin-top: 0;
+  color: #991b1b;
+}
+
+.disp-item {
+  border-top: 1px dashed #fca5a5;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.affected-line {
+  color: #9a3412;
+}
+
+.confirm-box {
+  margin-top: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.replay-banner {
+  background: #eef2ff;
+  border: 1px solid #a5b4fc;
+  color: #3730a3;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.blocked-tag {
+  color: #991b1b;
+  font-style: normal;
+  margin-left: 6px;
+}
+
+.ev-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.ev-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.ev-form select,
+.ev-form input {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.tbl th,
+.tbl td {
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  padding: 5px 6px;
+  vertical-align: top;
+}
+
+.tbl th {
+  color: #475569;
+  font-weight: 600;
+}
+
+.tbl .payload {
+  font-family: monospace;
+  font-size: 11px;
+  color: #64748b;
+  word-break: break-all;
+  max-width: 420px;
+}
+
+.sw.verified {
+  background: #22c55e;
+}
+.sw.contradiction {
+  background: #dc2626;
+}
+.sw.affected {
+  background: #f97316;
+  border-top: 2px dotted #f97316;
+  height: 0;
+}

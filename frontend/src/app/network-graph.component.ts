@@ -15,6 +15,8 @@ import { IsolationResult, Topology } from './models';
  * - 节点：来源 / 目标设备 / 必要供给点 / 普通节点
  * - 边：管段（按保存的名义方向显示箭头），旁路使用虚线
  * - 高亮：候选关闭阀（红）、残余/绕回供给路径（橙/绿）
+ * - 核验证据：已核验阀（绿）、待核验（黄）、矛盾阀（红粗）、过期（灰）、
+ *   矛盾导致的受影响残余路径（橙色点线）
  */
 @Component({
   selector: 'app-network-graph',
@@ -59,6 +61,7 @@ export class NetworkGraphComponent implements AfterViewInit, OnChanges, OnDestro
       return;
     }
     const topo = this.topology;
+    const verifByValve = new Map(topo.valves.map((v) => [v.id, v.verification]));
 
     const elements: cytoscape.ElementDefinition[] = [
       ...topo.nodes.map((n) => ({
@@ -70,15 +73,22 @@ export class NetworkGraphComponent implements AfterViewInit, OnChanges, OnDestro
         },
         position: { x: n.x, y: n.y },
       })),
-      ...topo.segments.map((s) => ({
-        data: {
-          id: s.id,
-          source: s.source,
-          target: s.target,
-          label: s.valve_id ?? '',
-          bypass: s.is_bypass,
-        },
-      })),
+      ...topo.segments.map((s) => {
+        const verif = s.valve_id ? verifByValve.get(s.valve_id) : null;
+        const status = verif?.status ?? '';
+        return {
+          data: {
+            id: s.id,
+            source: s.source,
+            target: s.target,
+            label:
+              (s.valve_id ?? '') +
+              (status === 'contradiction' ? ' ⚠矛盾' : status === 'verified' ? ' ✓' : ''),
+            bypass: s.is_bypass,
+            vstatus: status,
+          },
+        };
+      }),
     ];
 
     if (this.cy) {
@@ -151,6 +161,40 @@ export class NetworkGraphComponent implements AfterViewInit, OnChanges, OnDestro
             'target-arrow-color': '#a78bfa',
           },
         },
+        // ---- 核验证据状态着色 ----
+        {
+          selector: 'edge[vstatus = "verified"]',
+          style: {
+            'line-color': '#22c55e',
+            'target-arrow-color': '#22c55e',
+            width: 4,
+          },
+        },
+        {
+          selector: 'edge[vstatus = "pending"]',
+          style: {
+            'line-color': '#eab308',
+            'target-arrow-color': '#eab308',
+            width: 4,
+          },
+        },
+        {
+          selector: 'edge[vstatus = "contradiction"]',
+          style: {
+            'line-color': '#dc2626',
+            'target-arrow-color': '#dc2626',
+            width: 7,
+            color: '#fecaca',
+          },
+        },
+        {
+          selector: 'edge[vstatus = "expired"], edge[vstatus = "superseded"]',
+          style: {
+            'line-color': '#475569',
+            'target-arrow-color': '#475569',
+            'line-style': 'dashed',
+          },
+        },
         {
           selector: 'edge.close',
           style: {
@@ -167,6 +211,16 @@ export class NetworkGraphComponent implements AfterViewInit, OnChanges, OnDestro
             'target-arrow-color': '#fb923c',
             width: 4,
             'line-style': 'dotted',
+          },
+        },
+        {
+          selector: 'edge.affected',
+          style: {
+            'line-color': '#f97316',
+            'target-arrow-color': '#f97316',
+            width: 5,
+            'line-style': 'dotted',
+            color: '#fdba74',
           },
         },
         {
@@ -189,6 +243,10 @@ export class NetworkGraphComponent implements AfterViewInit, OnChanges, OnDestro
           selector: 'node.onpath',
           style: { 'border-color': '#67e8f9', 'border-width': 3 },
         },
+        {
+          selector: 'node.disputed',
+          style: { 'border-color': '#f97316', 'border-width': 3 },
+        },
       ] as cytoscape.StylesheetJsonBlock[],
       layout: { name: 'preset' },
     });
@@ -197,11 +255,34 @@ export class NetworkGraphComponent implements AfterViewInit, OnChanges, OnDestro
     this.cy!.fit(undefined, 40);
   }
 
+  private markPath(nodePath: string[], cls: string, nodeCls: string): void {
+    const cy = this.cy;
+    if (!cy) {
+      return;
+    }
+    nodePath.forEach((n) => cy.$(`node#${n}`).addClass(nodeCls));
+    for (let i = 0; i < nodePath.length - 1; i++) {
+      cy.edges(`[source = "${nodePath[i]}"][target = "${nodePath[i + 1]}"]`).addClass(cls);
+      cy.edges(`[source = "${nodePath[i + 1]}"][target = "${nodePath[i]}"]`).addClass(cls);
+    }
+  }
+
   private applyHighlights(): void {
     const cy = this.cy;
-    const result = this.result;
     const topo = this.topology;
-    if (!cy || !result || !topo) {
+    if (!cy || !topo) {
+      return;
+    }
+
+    // 待处置矛盾的受影响残余路径（与是否有计算结果无关，刷新页面后仍显示）
+    for (const d of topo.dispositions ?? []) {
+      if (d.affected_residual_path) {
+        this.markPath(d.affected_residual_path.nodes, 'affected', 'disputed');
+      }
+    }
+
+    const result = this.result;
+    if (!result) {
       return;
     }
 
@@ -228,25 +309,14 @@ export class NetworkGraphComponent implements AfterViewInit, OnChanges, OnDestro
         if (!path) {
           continue;
         }
-        path.forEach((n) => cy.$(`node#${n}`).addClass('onpath'));
-        for (let i = 0; i < path.length - 1; i++) {
-          cy.edges(`[source = "${path[i]}"][target = "${path[i + 1]}"]`).addClass('supply');
-          cy.edges(`[source = "${path[i + 1]}"][target = "${path[i]}"]`).addClass('supply');
-        }
+        this.markPath(path, 'supply', 'onpath');
       }
     } else if (!result.feasible) {
-      const mark = (nodePath: string[], cls: string) => {
-        nodePath.forEach((n) => cy.$(`node#${n}`).addClass('onpath'));
-        for (let i = 0; i < nodePath.length - 1; i++) {
-          cy.edges(`[source = "${nodePath[i]}"][target = "${nodePath[i + 1]}"]`).addClass(cls);
-          cy.edges(`[source = "${nodePath[i + 1]}"][target = "${nodePath[i]}"]`).addClass(cls);
-        }
-      };
       if (result.residual_path) {
-        mark(result.residual_path.nodes, 'residual');
+        this.markPath(result.residual_path.nodes, 'residual', 'onpath');
       }
       if (result.locked_witness_path) {
-        mark(result.locked_witness_path.nodes, 'witness');
+        this.markPath(result.locked_witness_path.nodes, 'witness', 'onpath');
       }
     }
   }

@@ -182,6 +182,11 @@ def compute_isolation(db: Session, target_id: str) -> dict[str, Any]:
         if e["valve_id"] and e["operable"] and e["is_open"] and not e["locked"]
     )
 
+    # 模型中已关闭的阀门：任何方案的隔离结论都隐含依赖它们保持关闭
+    assumed_closed = sorted(
+        e["valve_id"] for e in edges.values() if e["valve_id"] and not e["is_open"]
+    )
+
     base_graph = build_graph(edges, set())
 
     # 初始状态下目标已无来源路径：无需操作
@@ -192,6 +197,7 @@ def compute_isolation(db: Session, target_id: str) -> dict[str, Any]:
             "sources": sources,
             "essentials": essentials,
             "candidate_valves": _valve_view(edges),
+            "assumed_closed_valves": assumed_closed,
             "solutions": [{"close_valves": [], "size": 0, "alternative_rank": 0}],
             "best_solution": [],
             "residual_path": None,
@@ -251,6 +257,7 @@ def compute_isolation(db: Session, target_id: str) -> dict[str, Any]:
         "sources": sources,
         "essentials": essentials,
         "candidate_valves": _valve_view(edges),
+        "assumed_closed_valves": assumed_closed,
         "examined_combinations": examined,
         "solutions": [],
         "best_solution": [],
