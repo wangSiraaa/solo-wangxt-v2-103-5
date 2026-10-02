@@ -61,6 +61,16 @@ def seed_database(db: Session) -> None:
 
 
 def reset_database(db: Session) -> None:
-    """恢复演示初始状态：全部阀门打开、未锁定。"""
-    db.query(Valve).update({Valve.locked: False, Valve.is_open: True, Valve.operable: True})
+    """恢复演示初始状态：全部阀门打开、未锁定。
+
+    作为一次 model_reset 事件进入事件链（历史证据不删除，旧证据随之过期）；
+    空库（首次播种）不产生事件。
+    """
+    from .events import record_reset
+
+    valve_ids = [v.id for v in db.scalars(select(Valve)).all()]
+    if not valve_ids:
+        db.commit()
+        return
+    record_reset(db, valve_ids)
     db.commit()

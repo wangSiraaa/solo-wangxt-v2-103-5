@@ -275,3 +275,408 @@ footer {
   padding: 8px 12px;
   border-radius: 8px;
 }
+
+.notice {
+  margin-top: 12px;
+  background: #ecfeff;
+  color: #155e75;
+  border: 1px solid #67e8f9;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+/* ---------------- 核验状态徽章 ---------------- */
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 1px 7px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.badge.st-verified {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.badge.st-pending {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.badge.st-stale {
+  background: #fef9c3;
+  color: #854d0e;
+  border-color: #fde047;
+}
+
+.badge.st-contradiction {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+  font-weight: 700;
+}
+
+.badge.st-resolved {
+  background: #e0f2fe;
+  color: #075985;
+  border-color: #7dd3fc;
+}
+
+/* 方案状态复用徽章配色 */
+.badge.st-confirmable {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
+.badge.st-blocked {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.badge.st-outdated {
+  background: #fef9c3;
+  color: #854d0e;
+  border-color: #fde047;
+}
+
+.badge.st-infeasible {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.badge.st-confirmed {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #93c5fd;
+}
+
+.ok-text {
+  color: #166534;
+}
+
+.bad-text {
+  color: #991b1b;
+}
+
+/* ---------------- 阀门列表扩展 ---------------- */
+
+.valve-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.valve-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 3px;
+  padding-left: 22px;
+  gap: 6px;
+}
+
+.model-state {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 4px;
+}
+
+.model-state.open {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.model-state.closed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-explain {
+  margin: 3px 0 0 22px;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.mini-btns {
+  display: flex;
+  gap: 4px;
+}
+
+button.mini {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+button.mini.danger {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.bypass-tag {
+  font-style: normal;
+  font-size: 11px;
+  color: #7c3aed;
+  border: 1px solid #c4b5fd;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.lock-lab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------------- 证据表单 ---------------- */
+
+.evidence-form {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.evidence-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #475569;
+}
+
+.evidence-form select,
+.evidence-form input {
+  padding: 5px 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* ---------------- 方案卡片 ---------------- */
+
+.plan-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+}
+
+.plan-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.checks {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.checks li {
+  padding: 5px 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.check-reason {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.row-btns {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.affected-p {
+  background: #fdf2f8;
+  border: 1px solid #f9a8d4;
+}
+
+.linked {
+  padding-left: 14px;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.linked li {
+  margin: 3px 0;
+}
+
+.plan-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 10px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.plan-list li {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.plan-list li.active {
+  background: #ecfeff;
+}
+
+.plan-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  padding: 6px 8px;
+}
+
+.plan-link:hover {
+  background: #f1f5f9;
+}
+
+/* ---------------- 证据列表 ---------------- */
+
+.evidence-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+  max-height: 340px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.evidence-list > li {
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.ev-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ev-detail {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.review-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.mini-tag {
+  display: inline-block;
+  font-size: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 4px;
+}
+
+.mini-tag.block {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+/* ---------------- 事件链 ---------------- */
+
+.chain-box {
+  margin-top: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
+}
+
+.chain-list {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.vlegend .badge {
+  margin-right: 4px;
+}
+
+.sw.affected {
+  background: #f472b6;
+}
+
+/* ---------------- 重放弹窗 ---------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px 22px;
+  max-width: 760px;
+  width: 100%;
+  max-height: 85vh;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.replay-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+@media (max-width: 700px) {
+  .replay-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.replay-col {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+

@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 from itertools import combinations
 from typing import Any
 
@@ -23,6 +24,7 @@ import networkx as nx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .events import canonical_json
 from .models import Node, Segment, Valve
 
 MAX_ENUMERATE = 200_000
@@ -419,3 +421,138 @@ def topology_payload(db: Session) -> dict[str, Any]:
         ],
         "valves": _valve_view(edges),
     }
+
+
+# ---------------------------------------------------------------------------
+# 拓扑快照与指纹（核验证据、方案记录共用）
+# ---------------------------------------------------------------------------
+
+
+def topology_fingerprint(
+    nodes: list[Node] | None = None,
+    edges: dict[str, dict[str, Any]] | None = None,
+    *,
+    db: Session | None = None,
+) -> str:
+    """对“物理拓扑 + 阀态 + 锁定”取稳定 SHA-256 指纹（含运行态）。
+
+    仅管段端点/旁路标记与阀门 is_open/locked/operable 参与：
+    坐标、显示名等培训展示字段的变化不应使证据过期。
+    """
+    if db is not None:
+        nodes, edges = _load(db)
+    assert nodes is not None and edges is not None
+    material = {
+        "nodes": sorted(n.id for n in nodes),
+        "segments": sorted(
+            (
+                e["id"],
+                tuple(sorted((e["u"], e["v"]))),
+                e["kind"],
+                e["is_bypass"],
+                e["valve_id"],
+                e["is_open"],
+                e["locked"],
+                e["operable"],
+            )
+            for e in edges.values()
+        ),
+    }
+    return hashlib.sha256(canonical_json(material).encode("utf-8")).hexdigest()
+
+
+def structural_fingerprint(
+    nodes: list[Node] | None = None,
+    edges: dict[str, dict[str, Any]] | None = None,
+    *,
+    db: Session | None = None,
+) -> str:
+    """仅对“物理拓扑结构”（节点/管段端点/类型/旁路）取指纹，不含阀态。
+
+    方案执行期间阀门按计划关闭属于预期变化，不应使方案过期；
+    但管段连接改变意味着方案的物理前提改变，必须过期重算。
+    """
+    if db is not None:
+        nodes, edges = _load(db)
+    assert nodes is not None and edges is not None
+    material = {
+        "nodes": sorted(n.id for n in nodes),
+        "segments": sorted(
+            (
+                e["id"],
+                tuple(sorted((e["u"], e["v"]))),
+                e["kind"],
+                e["is_bypass"],
+                e["valve_id"],
+            )
+            for e in edges.values()
+        ),
+    }
+    return hashlib.sha256(canonical_json(material).encode("utf-8")).hexdigest()
+
+
+def topology_snapshot(db: Session, revision: int | None = None) -> dict[str, Any]:
+    """证据提交时刻的不可变拓扑快照（含模型版本与指纹）。"""
+    from .events import current_revision
+
+    payload = topology_payload(db)
+    rev = current_revision(db) if revision is None else revision
+    nodes, edges = _load(db)
+    payload["model_revision"] = rev
+    payload["topology_fingerprint"] = topology_fingerprint(nodes, edges)
+    return payload
+
+
+def snapshot_matches_current(snapshot: dict[str, Any], db: Session) -> bool:
+    """重放用：快照中的指纹是否等于当前拓扑/阀态指纹。"""
+    nodes, edges = _load(db)
+    return snapshot.get("topology_fingerprint") == topology_fingerprint(nodes, edges)
+
+
+def build_graph_from_valve_views(
+    valve_views: list[dict[str, Any]], *, overrides: dict[str, bool] | None = None
+) -> nx.Graph:
+    """按“阀门视图 + 开闭覆盖”构建无向物理图。
+
+    供方案复核使用：overrides[valve_id]=False 表示按现场观察强制视为关闭，
+    从而在 NetworkX 上直接重算矛盾观察带来的残余路径，无需触碰模型阀态。
+    """
+    overrides = overrides or {}
+    g = nx.Graph()
+    for v in valve_views:
+        g.add_node(v["endpoints"][0])
+        g.add_node(v["endpoints"][1])
+        is_open = overrides.get(v["id"], v["is_open"])
+        if not is_open:
+            continue
+        a, b = v["endpoints"]
+        g.add_edge(a, b, edge_id=v["segment_id"], valve_id=v["id"])
+    return g
+
+
+def paths_through_valves(
+    g: nx.Graph,
+    source: str,
+    target: str,
+    valve_edges: dict[str, tuple[str, str]],
+    through_valves: set[str],
+    *,
+    max_paths: int = 5,
+) -> list[list[str]]:
+    """枚举 source→target 中经过指定阀门（如矛盾阀）的至多 max_paths 条简单路径。"""
+    if source not in g or target not in g or not nx.has_path(g, source, target):
+        return []
+    wanted_edges: set[tuple[str, str]] = set()
+    for vid in through_valves:
+        if vid in valve_edges:
+            a, b = valve_edges[vid]
+            wanted_edges.add((a, b))
+            wanted_edges.add((b, a))
+    found: list[list[str]] = []
+    for p in nx.shortest_simple_paths(g, source, target):
+        pairs = list(zip(p, p[1:]))
+        if any(pair in wanted_edges for pair in pairs):
+            found.append(p)
+            if len(found) >= max_paths:
+                break
+    return found

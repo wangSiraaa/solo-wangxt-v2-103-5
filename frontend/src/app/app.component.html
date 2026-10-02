@@ -1,22 +1,26 @@
 <div class="page">
   <header>
-    <h1>管网隔离方案培训演示</h1>
+    <h1>管网隔离方案培训演示 · 阀门核验证据</h1>
     <p class="sub">
-      Angular + Cytoscape.js 拓扑 ｜ FastAPI + NetworkX 候选隔离集合 ｜
-      PostgreSQL 连接与阀门状态
+      Angular + Cytoscape.js 拓扑/核验标记 ｜ FastAPI + NetworkX 方案复核 ｜
+      仅追加事件链（哈希链）持久化证据、方案与复核记录
     </p>
     <div class="disclaimer">
-      仅针对给定拓扑与阀门模型做工艺培训演示，<b>不连接真实控制系统</b>，
-      计算结果不代表真实检修已满足安全隔离条件。
+      本系统是<b>工艺培训演示</b>：核验证据与方案确认只代表“在给定模型与现场记录下的流程练习”，
+      <b>不连接真实控制系统、不构成真实检修安全隔离（LOTO）确认</b>。
+      模型与观察矛盾时系统不自动采信任一方，必须显式复核/纠正。
     </div>
   </header>
 
   @if (error()) {
     <div class="error">{{ error() }}</div>
   }
+  @if (notice()) {
+    <div class="notice">{{ notice() }}</div>
+  }
 
   <div class="layout">
-    <!-- 左：控制与阀门锁定 -->
+    <!-- 左：控制、阀态/锁定、证据提交 -->
     <aside class="panel">
       <h2>目标设备与样例</h2>
       <p class="hint">
@@ -24,139 +28,359 @@
       </p>
       <div class="btns">
         <button class="primary" [disabled]="loading()" (click)="compute()">
-          {{ loading() ? '计算中…' : '重新计算隔离方案' }}
+          {{ loading() ? '计算中…' : '计算隔离方案（生成方案记录）' }}
         </button>
         <button (click)="loadSample(1)">样例1 旁路绕回</button>
         <button (click)="loadSample(2)">样例2 锁定入口阀</button>
         <button (click)="loadSample(3)">样例3 锁定出口阀</button>
-        <button class="ghost" (click)="resetAll()">全部重置</button>
+        <button class="ghost" (click)="resetAll()">全部重置（保留历史）</button>
+        <button class="ghost" (click)="toggleEvents()">
+          {{ showEventChain() ? '隐藏' : '查看' }}事件链（{{ plans() ? '' : '' }}{{ eventChain().length || '' }}）
+        </button>
       </div>
 
-      <h2>阀门锁定（禁止操作）</h2>
-      <p class="hint">勾选后该阀门保持当前状态、不参与候选关闭集合。</p>
+      <h2>阀门模型态 / 锁定 / 当前核验</h2>
+      <p class="hint">
+        “模型记录”把操作结果写入事件链；勾选“锁定”=禁止关闭。右侧徽标为证据链派生的核验状态。
+      </p>
       <ul class="valves">
         @for (v of topology()?.valves; track v.id) {
           <li [class.bypass]="v.is_bypass">
-            <label>
-              <input
-                type="checkbox"
-                [checked]="locks()[v.id]"
-                (change)="toggleLock(v.id, !locks()[v.id])"
-              />
-              <span class="vid">{{ v.id }}</span>
+            <div class="valve-row">
+              <label class="lock-lab">
+                <input
+                  type="checkbox"
+                  [checked]="locks()[v.id]"
+                  (change)="toggleLock(v.id, !locks()[v.id])"
+                  title="锁定（禁止关闭）"
+                />
+                <span class="vid">{{ v.id }}</span>
+              </label>
               <span class="vname">{{ v.name }}</span>
-              @if (v.is_bypass) {
-                <em>旁路</em>
-              }
-            </label>
+              <span class="model-state" [class.open]="v.is_open" [class.closed]="!v.is_open">
+                模型{{ v.is_open ? '开' : '关' }}
+              </span>
+            </div>
+            <div class="valve-sub">
+              <span class="badge" [class]="'badge ' + statusClass(v.verification?.status ?? 'pending')">
+                {{ v.verification?.status_label ?? '待核验' }}
+                @if (v.verification?.evidence_code) {
+                  · {{ v.verification?.evidence_code }}
+                }
+              </span>
+              <span class="mini-btns">
+                <button class="mini" (click)="setModelState(v.id, true)">记为开</button>
+                <button class="mini" (click)="setModelState(v.id, false)">记为关</button>
+              </span>
+            </div>
+            @if (v.verification?.explanation) {
+              <p class="badge-explain">{{ v.verification?.explanation }}</p>
+            }
+            @if (v.is_bypass) {
+              <em class="bypass-tag">旁路</em>
+            }
           </li>
         }
       </ul>
+
+      <h2>提交现场核验证据</h2>
+      <p class="hint">
+        证据含观察值、发生时刻与当前拓扑快照；自动关联当前方案。
+        观察与模型不一致时进入“待处置”，<b>不会</b>改写模型阀态。
+      </p>
+      <div class="evidence-form">
+        <label>
+          阀门
+          <select [ngModel]="evidenceForm().valve_id" (ngModelChange)="updateForm('valve_id', $event)">
+            @for (v of topology()?.valves; track v.id) {
+              <option [value]="v.id">{{ v.id }} {{ v.name }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          现场观察
+          <select [ngModel]="evidenceForm().observed" (ngModelChange)="updateForm('observed', $event)">
+            <option value="closed">关</option>
+            <option value="open">开</option>
+            <option value="unknown">未知</option>
+          </select>
+        </label>
+        <label>
+          发生时刻（可留空=现在；可填过去时刻模拟迟到观察）
+          <input
+            type="datetime-local"
+            [ngModel]="evidenceForm().observed_at"
+            (ngModelChange)="updateForm('observed_at', $event)"
+          />
+        </label>
+        <label>
+          核验人
+          <input
+            type="text"
+            placeholder="如：学员A"
+            [ngModel]="evidenceForm().observer"
+            (ngModelChange)="updateForm('observer', $event)"
+          />
+        </label>
+        <label>
+          备注
+          <input
+            type="text"
+            placeholder="现场情况说明"
+            [ngModel]="evidenceForm().note"
+            (ngModelChange)="updateForm('note', $event)"
+          />
+        </label>
+        <div class="hint">关联方案：<b>{{ selectedPlan()?.plan_code ?? '（无）' }}</b></div>
+        <button class="primary" (click)="submitEvidence()">提交核验证据</button>
+      </div>
     </aside>
 
     <!-- 中：拓扑图 -->
     <main class="panel graph-panel">
-      <h2>管网拓扑（箭头=介质名义方向，紫虚线=旁路，★=必要供给点）</h2>
-      <app-network-graph [topology]="topology()" [result]="result()" />
+      <h2>
+        管网拓扑（箭头=名义方向，紫虚线=旁路，★=必要供给点；
+        边色=核验状态，品红=矛盾影响的残余路径）
+      </h2>
+      <app-network-graph
+        [topology]="topology()"
+        [result]="result()"
+        [planReview]="selectedPlan()"
+      />
       <div class="legend">
         <span><i class="sw close"></i> 候选关闭阀</span>
         <span><i class="sw supply"></i> 方案后供给路径</span>
         <span><i class="sw residual"></i> 残余连通路径</span>
-        <span><i class="sw witness"></i> 经锁定阀的见证路径</span>
+        <span><i class="sw witness"></i> 经锁定阀见证路径</span>
+        <span><i class="sw affected"></i> 矛盾影响的残余路径</span>
       </div>
+      <div class="legend vlegend">
+        <span class="badge st-verified">✓ 已核验</span>
+        <span class="badge st-pending">待核验</span>
+        <span class="badge st-stale">⧗ 过期</span>
+        <span class="badge st-contradiction">⚠ 矛盾·待处置</span>
+        <span class="badge st-resolved">⚑ 已复核结案</span>
+      </div>
+
+      @if (showEventChain()) {
+        <div class="chain-box">
+          <h3>持久化事件链（仅追加，SHA-256 哈希链）</h3>
+          <p class="hint">
+            链校验：
+            @if (chainOk() === true) {
+              <b class="ok-text">通过（{{ eventChain().length }} 个事件）</b>
+            } @else if (chainOk() === false) {
+              <b class="bad-text">失败</b>
+            } @else {
+              校验中…
+            }
+          </p>
+          <ol class="chain-list">
+            @for (e of eventChain(); track e.seq) {
+              <li>
+                <code>#{{ e.seq }}</code> {{ e.event_type }}
+                <span class="hint">（模型版本 r{{ e.model_revision }}）</span>
+              </li>
+            }
+          </ol>
+        </div>
+      }
     </main>
 
-    <!-- 右：结果 -->
+    <!-- 右：方案 + 证据 -->
     <aside class="panel result-panel">
-      <h2>计算结果</h2>
-
-      @if (!result()) {
-        <p class="hint">点击“重新计算”或选择样例开始。</p>
-      }
-
-      @if (result(); as r) {
-        @if (r.feasible) {
-          <div class="ok">✓ 找到可行隔离集合（枚举 {{ r.examined_combinations }} 组）</div>
-          <h3>推荐方案：关闭以下 {{ r.best_solution.length }} 只阀门</h3>
-          <ul class="close-list">
-            @for (vid of r.best_solution; track vid) {
-              <li><b>{{ vid }}</b> {{ valveName(vid) }}</li>
+      <!-- 当前方案门禁 -->
+      <h2>本次方案与核验门禁</h2>
+      @if (selectedPlan(); as p) {
+        <div class="plan-card">
+          <div class="plan-head">
+            <b>{{ p.plan_code }}</b>
+            <span class="badge" [class]="'badge st-' + p.status">{{ statusLabel(p.status) }}</span>
+            @if (p.superseded_by) {
+              <span class="badge st-stale">已被 PL-{{ p.superseded_by }} 取代</span>
             }
-          </ul>
+          </div>
+          <p class="hint">{{ p.status_text }}</p>
 
-          <h3>必要供给点仍可达</h3>
-          @for (sol of r.solutions.slice(0, 1); track sol.alternative_rank) {
-            @for (p of r.essentials; track p) {
-              <div class="supply">
-                ★ <b>{{ p }}</b> 来源路径：
-                <code>{{ sol.supply_paths[p]?.join(' → ') || '—' }}</code>
-              </div>
-            }
-          }
-
-          @if (r.solutions.length > 1) {
-            <h3>等价最小方案（{{ r.solutions.length }} 个）</h3>
-            <ul class="alts">
-              @for (s of r.solutions; track s.alternative_rank) {
+          @if (p.feasible) {
+            <h3>边界阀（要求关闭）逐阀核验</h3>
+            <ul class="checks">
+              @for (c of p.valve_checks; track c.valve_id) {
                 <li>
-                  方案{{ s.alternative_rank + 1 }}：{{ s.close_valves.join('、') }}
-                  @if (s.closes_bypass_valves.length) {
-                    <em>（切断旁路 {{ s.closes_bypass_valves.join('、') }}，经环网供 P2）</em>
-                  }
+                  <span class="badge" [class]="'badge st-' + c.status">{{ c.status_label }}</span>
+                  <b>{{ c.valve_id }}</b>
+                  <span class="hint">{{ valveName(c.valve_id) }}</span>
+                  <p class="check-reason">{{ c.reason }}</p>
                 </li>
               }
             </ul>
           }
-        } @else {
-          <div class="bad">✗ 当前锁定下找不到可行方案</div>
-          <p class="reason">{{ r.infeasible_reason }}</p>
 
-          <h3>仍然连通的一条残余路径</h3>
-          @if (r.residual_path; as rp) {
-            <div class="path residual-p">
-              <code>{{ rp.nodes.join(' → ') }}</code>
-              <div class="meta">
-                经过阀门：{{ formatValves(rp.valves) }}
+          @if (p.status === 'blocked' && p.affected_residual_paths.target_reachable_with_observations) {
+            <h3>受矛盾观察影响的残余路径</h3>
+            <p class="hint">按现场观察覆盖阀态后用 NetworkX 重算（模型阀态未被修改）：</p>
+            @for (path of p.affected_residual_paths.paths; track $index) {
+              <div class="path affected-p">
+                <code>{{ path.nodes.join(' → ') }}</code>
+                <div class="meta">
+                  经过阀门：{{ formatValves(path.valves) }}
+                </div>
+                <div class="meta bad-text">
+                  矛盾阀：{{ path.contradiction_valves.join('、') }}
+                </div>
               </div>
-              <div class="meta" [class.bypass-line]="rp.uses_bypass">
-                {{ rp.uses_bypass ? '该残余路径经由旁路。' : '' }}
-                {{
-                  rp.locked_valves_on_path.length
-                    ? '含锁定阀：' + rp.locked_valves_on_path.join('、')
-                    : '（最短残余路径未直接经过锁定阀）'
-                }}
-              </div>
-            </div>
+            }
           }
 
-          @if (r.locked_witness_path; as wp) {
-            <h3>经锁定阀的见证路径</h3>
-            <div class="path witness-p">
-              <code>{{ wp.nodes.join(' → ') }}</code>
-              <div class="meta">
-                锁定阀：{{ wp.locked_valves_on_path.join('、') }} 无法关闭，介质仍可回到
-                {{ r.target_id }}
-              </div>
-            </div>
-          }
+          <div class="btns row-btns">
+            <button class="mini" (click)="recordPlanValvesClosed()">便捷：模型记录边界阀全关</button>
+            <button
+              class="primary"
+              [disabled]="!p.confirmable"
+              (click)="confirmPlan(p)"
+            >
+              确认方案
+            </button>
+          </div>
 
-          @if (r.unconstrained_best; as ub) {
-            <h3>切得掉目标但不可接受的最小切法</h3>
-            <p class="hint">
-              关闭 {{ joinIds(ub.close_valves) }}（{{ ub.size }} 只）即可切断目标，
-              但会断供：<b>{{ joinIds(ub.disconnects_essentials) }}</b
-              >。其中
-              <b>{{ joinIds(ub.unavoidable_essentials) }}</b>
-              在任何切法下都无法同时保住，因此不存在合格方案；其余必要供给点该切法仍可保住。
-            </p>
+          @if (p.linked_evidence.length) {
+            <h3>本方案关联证据（原始记录，含已过期/已结案）</h3>
+            <ul class="linked">
+              @for (e of p.linked_evidence; track e.evidence_code) {
+                <li>
+                  <span class="badge" [class]="'badge st-' + e.status">{{ e.status_label }}</span>
+                  <code>{{ e.evidence_code }}</code>
+                  {{ e.valve_id }} 观察“{{ e.observed_label }}”
+                  <span class="hint">时刻 {{ e.observed_at | slice: 0:16 }}</span>
+                </li>
+              }
+            </ul>
           }
+        </div>
+      } @else {
+        <p class="hint">点击“计算隔离方案”后在此做逐阀核验与确认。</p>
+      }
+
+      <!-- 历史方案 -->
+      <h2>历史方案（{{ plans().length }}）</h2>
+      <ul class="plan-list">
+        @for (p of plans(); track p.plan_id) {
+          <li [class.active]="selectedPlan()?.plan_id === p.plan_id">
+            <button class="plan-link" (click)="selectPlan(p)">
+              <b>{{ p.plan_code }}</b>
+              <span class="badge" [class]="'badge st-' + p.status">{{ statusLabel(p.status) }}</span>
+              <span class="hint">{{ p.close_valves.join('+') || '（无阀）' }}</span>
+            </button>
+          </li>
         }
+      </ul>
+
+      <!-- 证据与处置 -->
+      <h2>核验证据链与待处置</h2>
+      @if (evidenceList(); as el) {
+        <p class="hint">模型版本 r{{ el.model_revision }}；共 {{ el.evidence.length }} 条证据，永不删除。</p>
+        <ul class="evidence-list">
+          @for (e of el.evidence; track e.evidence_code) {
+            <li>
+              <div class="ev-head">
+                <span class="badge" [class]="'badge st-' + e.status">{{ e.status_label }}</span>
+                <code>{{ e.evidence_code }}</code>
+                <b>{{ e.valve_id }}</b>
+                观察“{{ e.observed_label }}”
+                <span class="hint">{{ e.observed_at | slice: 0:16 }}</span>
+                <button class="mini" (click)="toggleEvidenceDetail(e.evidence_code)">
+                  {{ expandedEvidence() === e.evidence_code ? '收起' : '详情' }}
+                </button>
+              </div>
+              @if (expandedEvidence() === e.evidence_code) {
+                <div class="ev-detail">
+                  <p class="hint">{{ e.explanation }}</p>
+                  <p class="hint">
+                    影响方案：
+                    @for (a of e.affected_plans; track a.plan_code) {
+                      <span class="mini-tag" [class.block]="a.blocks_confirmation">
+                        {{ a.plan_code }}{{ a.blocks_confirmation ? '·阻塞' : '' }}
+                      </span>
+                    } @if (!e.affected_plans.length) {
+                      无
+                    }
+                  </p>
+                  @if (e.status === 'contradiction') {
+                    <div class="review-btns">
+                      <button class="mini danger" (click)="review(e.evidence_code, 'correct_model')">
+                        复核：纠正模型（以观察为准）
+                      </button>
+                      <button class="mini" (click)="review(e.evidence_code, 'confirm_model')">
+                        复核：维持模型（需重新核验）
+                      </button>
+                      <button class="mini ghost" (click)="review(e.evidence_code, 'reinspect')">
+                        安排重新检查
+                      </button>
+                    </div>
+                  }
+                  <button class="mini ghost" (click)="showReplay(e.evidence_code)">
+                    版本化重放（提交当时 vs 当前解释）
+                  </button>
+                </div>
+              }
+            </li>
+          }
+        </ul>
       }
     </aside>
   </div>
 
+  <!-- 重放弹窗 -->
+  @if (replay(); as r) {
+    <div class="modal-backdrop" (click)="closeReplay()">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <h2>证据版本化重放 · {{ r.evidence.evidence_code }}</h2>
+        <p class="hint">
+          解释算法版本：<code>{{ r.eval_version }}</code> ｜ 快照指纹：
+          <code>{{ r.snapshot_fingerprint | slice: 0:12 }}…</code>
+        </p>
+        <div class="replay-grid">
+          <div class="replay-col">
+            <h3>提交当时的解释</h3>
+            <span class="badge" [class]="'badge st-' + r.interpretation_at_submission.status">
+              {{ r.interpretation_at_submission.status_label }}
+            </span>
+            <p>{{ r.interpretation_at_submission.explanation }}</p>
+            <p class="hint">
+              模型版本 r{{ r.interpretation_at_submission.model_revision }}；
+              当时该阀模型态：
+              {{ r.interpretation_at_submission.model_valve?.is_open ? '开' : '关' }}
+              （锁定：{{ r.interpretation_at_submission.model_valve?.locked ? '是' : '否' }}）
+            </p>
+          </div>
+          <div class="replay-col">
+            <h3>当前的解释</h3>
+            <span class="badge" [class]="'badge st-' + r.interpretation_current.status">
+              {{ r.interpretation_current.status_label }}
+            </span>
+            <p>{{ r.interpretation_current.explanation }}</p>
+            <p class="hint">当前模型版本 r{{ r.interpretation_current.model_revision }}</p>
+          </div>
+        </div>
+        @if (r.reviews.length) {
+          <h3>复核事件</h3>
+          <ul>
+            @for (rv of r.reviews; track rv.seq) {
+              <li>
+                <code>#{{ rv.seq }}</code> {{ rv.disposition }} — {{ rv.note || '（无说明）' }}
+              </li>
+            }
+          </ul>
+        }
+        <div class="btns">
+          <button class="primary" (click)="closeReplay()">关闭</button>
+        </div>
+      </div>
+    </div>
+  }
+
   <footer>
-    演示拓扑：来源 SRC — N1 — N2 — 设备T — N3；N2-BP-N3 旁路与 T 并联；
-    N1-N5-N3 环网联络；P1/P2 为不应断供支路。
+    演示边界：仅对给定拓扑与阀门模型做枚举与核验流程练习；假设阀门与管段 1:1、关阀即断边，
+    不含背压/泄漏/盲板/双阀双断等真实工况。任何输出均不得作为真实 LOTO 安全依据。
   </footer>
 </div>
